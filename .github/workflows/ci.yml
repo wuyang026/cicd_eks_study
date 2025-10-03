@@ -72,7 +72,7 @@ jobs:
           git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
           cd cicd-study-manifest/apps/cicd-study-service
 
-          sed -i 's|^image:.*$|image: ${{ env.ACCOUNT_ID}}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}|' deployment.yaml
+          sed -i 's|^image:[[:space:]]*.*|image: ${{ env.ACCOUNT_ID}}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}|' deployment.yaml
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
