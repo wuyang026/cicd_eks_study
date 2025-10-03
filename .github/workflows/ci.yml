@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ghcr.io/matcha2smiley/cicd-study-service
+  IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
 
 jobs:
   build-and-deploy:
