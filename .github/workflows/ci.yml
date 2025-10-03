@@ -1,7 +1,11 @@
 name: CI Build and Push with Auto Manifest Update
 
+# on:
+#   workflow_dispatch:
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 env:
   IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
