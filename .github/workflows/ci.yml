@@ -32,8 +32,23 @@ jobs:
       - name: Set version tag (commit SHA)
         run: echo "TAG=${{ github.sha }}" >> $GITHUB_ENV
 
-      - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      # AWS CLI のセットアップ
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Dockerログイン
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+            | docker login --username AWS --password-stdin \
+              $(aws sts get-caller-identity --query 'Account' --output text).dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+      
+      # - name: Log in to GitHub Container Registry
+      #   run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build Docker images
         run: |
@@ -46,14 +61,14 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.IMAGE_NAME }}:${{ env.TAG }}
 
-      - name: Update deployment.yaml in manifest repo
-        run: |
-          git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/matcha2smiley/cicd-study-manifest.git
-          cd cicd-study-manifest/apps/cicd-study-service
+      # - name: Update deployment.yaml in manifest repo
+      #   run: |
+      #     git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/matcha2smiley/cicd-study-manifest.git
+      #     cd cicd-study-manifest/apps/cicd-study-service
 
-          sed -i 's|image: ghcr.io/matcha2smiley/cicd-study-service:.*|image: ghcr.io/matcha2smiley/cicd-study-service:${{ env.TAG }}|' deployment.yaml
+      #     sed -i 's|image: ghcr.io/matcha2smiley/cicd-study-service:.*|image: ghcr.io/matcha2smiley/cicd-study-service:${{ env.TAG }}|' deployment.yaml
 
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git commit -am "Update image to ${{ env.TAG }}"
-          git push
+      #     git config user.name "github-actions"
+      #     git config user.email "actions@github.com"
+      #     git commit -am "Update image to ${{ env.TAG }}"
+      #     git push
