@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-
 env:
   IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
   ACCOUNT_ID: $(aws sts get-caller-identity --query 'Account' --output text)
@@ -51,14 +50,6 @@ jobs:
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
             | docker login --username AWS --password-stdin ${{ env.ACCOUNT_ID}}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
       
-      # - name: Log in to GitHub Container Registry
-      #   run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      # - name: Build Docker images
-      #   run: |
-      #     docker build \
-      #       -t ${{ env.IMAGE_NAME }}:latest \
-      #       -t ${{ env.IMAGE_NAME }}:${{ env.TAG }} .
       # Dockerイメージのビルド
       - name: Build Docker image
         run: |
@@ -76,17 +67,12 @@ jobs:
           docker push \
           ${{ env.ACCOUNT_ID}}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}
 
-      # - name: Push Docker images
-      #   run: |
-      #     docker push ${{ env.IMAGE_NAME }}:latest
-      #     docker push ${{ env.IMAGE_NAME }}:${{ env.TAG }}
-
       - name: Update deployment.yaml in manifest repo
         run: |
           git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
           cd cicd-study-manifest/apps/cicd-study-service
 
-          sed -i 's|image: .*|image: ${{ env.ACCOUNT_ID}}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}|' deployment.yaml
+          sed -i 's|^image:.*$|image: ${{ env.ACCOUNT_ID}}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}|' deployment.yaml
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
