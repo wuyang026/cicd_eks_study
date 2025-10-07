@@ -9,6 +9,6 @@ import org.springframework.web.bind.annotation.RestController
 class SampleController{
     @GetMapping
     fun hello(): String{
-        return "Hello, Spring boot Kotlin!!!"
+        return "Hello, Spring boot Kotlin!!"
     }
 }
