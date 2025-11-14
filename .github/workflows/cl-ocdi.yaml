@@ -104,7 +104,7 @@ jobs:
           # sed -i 's|\(image: .*/.*:\).*|\1${{ env.PROJECT }}-${{ env.VERSION }}|' $NEW_DEPLOYMENT_FILE
           
           # KUSTOMIZE_FILE=./kustomization.yaml
-          sed -i "0,/^\s*-\s*deployment\.yaml/s|^\(\s*-\s*\)deployment\.yaml|\1${{NEW_DEPLOYMENT_FILE}}|" kustomization.yaml
+          sed -i '0,/^\s*-\s*deployment\.yaml/s|^\(\s*-\s*\)deployment\.yaml|\1${{NEW_DEPLOYMENT_FILE}}|' kustomization.yaml
           #sed -i '0,/^\s*-\s*deployment\.yaml/{s|^\s*-\s*deployment\.yaml|- $NEW_DEPLOYMENT_FILE|}' kustomization.yaml
           # git 設定
           git config user.name "github-actions"
