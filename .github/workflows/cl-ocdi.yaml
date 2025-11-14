@@ -85,7 +85,7 @@ jobs:
       # Docker イメージを Amazon ECR にプッシュ
       - name: Push Docker image to Amazon ECR
         run: |
-          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${env.ECR_REPO}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{env.ECR_REPO}}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
       # OIDC を使用して manifest リポジトリに新しい deployment ファイルを作成
       - name: Update deployment.yaml in manifest repo via OIDC
