@@ -93,7 +93,7 @@ jobs:
       - name: Create deployment.yaml in manifest repo
         run: |
           # GitHub Actions の GITHUB_TOKEN で manifest リポジトリをクローン
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.MANIFEST_REPO }} manifest-repo
+          git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
           cd manifest-repo/apps/${{ env.PROJECT }}
 
           # 新しい deployment ファイル名を作成
