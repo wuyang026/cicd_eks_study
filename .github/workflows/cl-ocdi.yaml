@@ -7,10 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_ACCOUNT_ID: 759348358497
   IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
   AWS_REGION: ap-south-1  # AWS のリージョン
-  ROLE_TO_ASSUME: arn:aws:iam::759348358497:role/go-github-action-role  # 作成済みの OIDC ロール
+  ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}  # 作成済みの OIDC ロール
 
 jobs:
   build-and-deploy:
@@ -52,6 +51,11 @@ jobs:
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Get AWS Account ID
+        id: account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
 
       # Amazon ECR にログイン
       - name: Login to Amazon ECR
