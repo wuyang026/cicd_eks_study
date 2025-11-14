@@ -8,7 +8,8 @@ on:
         required: true  # 必須入力
 
 env:
-  IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
+  IMAGE_NAME: cicd-study-service
+  ECR_REPO: ghcr.io/wuyang026
   AWS_REGION: ap-south-1
   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
   MANIFEST_REPO: wuyang026/cicd-study-manifest   # manifestリポジトリ名
@@ -84,7 +85,7 @@ jobs:
       # Docker イメージを Amazon ECR にプッシュ
       - name: Push Docker image to Amazon ECR
         run: |
-          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${env.ECR_REPO}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
       # OIDC を使用して manifest リポジトリに新しい deployment ファイルを作成
       - name: Update deployment.yaml in manifest repo via OIDC
