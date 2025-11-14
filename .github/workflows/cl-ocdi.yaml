@@ -1,4 +1,4 @@
-name: CI-OIDC Build and Push with Auto Manifest Update
+name: CI-OIDC Build and Push for cicd-study-service
 
 on:
   workflow_dispatch:
@@ -8,8 +8,8 @@ on:
         required: true  # 必須入力
 
 env:
-  IMAGE_NAME: cicd-study-service
-  ECR_REPO: ghcr.io/wuyang026
+  PROJECT: cicd-study-service                     # 固定プロジェクト名
+  ECR_REPO: cicd-shared-repo                     # 共用ECRリポジトリ名
   AWS_REGION: ap-south-1
   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
   MANIFEST_REPO: wuyang026/cicd-study-manifest   # manifestリポジトリ名
@@ -24,7 +24,7 @@ jobs:
 
     steps:
       # リポジトリをチェックアウト（サブモジュールは無効化）
-      - name: Checkout app repository
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           submodules: false
@@ -44,7 +44,7 @@ jobs:
       - name: Build JAR
         run: ./gradlew :app:api:bootJar
 
-      # VERSION の設定（必須入力チェック）
+      # VERSION の必須チェック
       - name: Set VERSION
         run: |
           if [ -z "${{ github.event.inputs.VERSION }}" ]; then
@@ -60,7 +60,7 @@ jobs:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # AWS アカウントIDを取得
+      # AWS アカウントID取得
       - name: Get AWS Account ID
         id: account
         run: |
@@ -71,36 +71,38 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Docker イメージをビルド
+      # Docker イメージビルド
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ env.VERSION }} -f Dockerfile .
+          IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+          docker build -t $IMAGE_NAME -f Dockerfile .
 
-      # Docker イメージにタグを付与
-      - name: Tag Docker image
+      # Docker イメージにタグを付与して ECR 用に
+      - name: Tag Docker image for ECR
         run: |
-          docker tag ${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
-          ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+          docker tag $IMAGE_NAME ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
 
-      # Docker イメージを Amazon ECR にプッシュ
-      - name: Push Docker image to Amazon ECR
+      # Docker イメージを ECR に push
+      - name: Push Docker image to ECR
         run: |
-          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{env.ECR_REPO}}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
 
-      # OIDC を使用して manifest リポジトリに新しい deployment ファイルを作成
-      - name: Update deployment.yaml in manifest repo via OIDC
+      # manifest リポジトリに新しい deployment ファイルを作成
+      - name: Create deployment.yaml in manifest repo
         run: |
           # GitHub CLI と OIDC トークンで manifest リポジトリをクローン
           gh auth login --with-token <<< "$GITHUB_TOKEN"
           gh repo clone ${{ env.MANIFEST_REPO }} manifest-repo
-          cd manifest-repo/apps/cicd-study-service
+          cd manifest-repo/apps/${{ env.PROJECT }}
 
           # 新しい deployment ファイル名を作成
-          NEW_DEPLOYMENT_FILE="deployment-${{ env.VERSION }}.yaml"
+          NEW_DEPLOYMENT_FILE="deployment-${{ env.PROJECT }}-${{ env.VERSION }}.yaml"
           cp deployment.yaml $NEW_DEPLOYMENT_FILE
 
           # イメージタグを更新
-          sed -i 's|\(image: .*/.*:\).*|\1${{ env.VERSION }}|' $NEW_DEPLOYMENT_FILE
+          sed -i 's|\(image: .*/.*:\).*|\1${{ env.PROJECT }}-${{ env.VERSION }}|' $NEW_DEPLOYMENT_FILE
 
           # git 設定
           git config user.name "github-actions"
@@ -108,9 +110,8 @@ jobs:
 
           # 新しいファイルをコミットして push
           git add $NEW_DEPLOYMENT_FILE
-          git commit -m "Add new deployment for version ${{ env.VERSION }}"
+          git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
           git push
-
 
 
 # name: CI-OIDC Build and Push with Auto Manifest Update
