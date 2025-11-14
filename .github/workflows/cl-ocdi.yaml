@@ -25,14 +25,7 @@ jobs:
       - name: Checkout app repository
         uses: actions/checkout@v3
         with:
-          submodules: recursive  # submodule を自動初期化
-          fetch-depth: 1         # 必要に応じて浅く clone
-
-      # submodule の URL を同期・初期化
-      - name: Init submodules manually
-        run: |
-          git submodule sync --recursive
-          git submodule update --init --recursive
+          submodules: false  # submodule を自動初期化
 
       # JDK 21 のセットアップ
       - name: Set up JDK 21
