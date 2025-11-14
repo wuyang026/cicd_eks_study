@@ -105,17 +105,13 @@ jobs:
           
           # KUSTOMIZE_FILE=./kustomization.yaml
           # sed -i "0,/^\s*-\s*deployment\.yaml/s|^\(\s*-\s*\)deployment\.yaml|\1$NEW_DEPLOYMENT_FILE|" kustomization.yaml
-          # sed -i '0,/^\s*-\s*deployment\.yaml/{s|^\s*-\s*deployment\.yaml|- $NEW_DEPLOYMENT_FILE|}' kustomization.yaml
-          echo "Current dir: $(pwd)"
-          ls -l
-          sed -i '$ a helloworld' deployment.yaml
-          cat deployment.yaml
+          sed -i '0,/^\s*-\s*deployment\.yaml/{s|^\s*-\s*deployment\.yaml|- $NEW_DEPLOYMENT_FILE|}' kustomization.yaml
           # git 設定
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
           # 新しいファイルをコミットして push
-          git add $NEW_DEPLOYMENT_FILE
+          git add .
           git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
           git push
 
