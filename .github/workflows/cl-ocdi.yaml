@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       VERSION:
-        description: 'Dockerイメージのバージョン (例: 1.0.3)'
+        description: 'Dockerイメージのバージョン (例: v1.0.3)'
         required: true  # 必須入力
 
 env:
