@@ -111,7 +111,7 @@ jobs:
           git config user.email "actions@github.com"
 
           # 新しいファイルをコミットして push
-          git add $NEW_DEPLOYMENT_FILE
+          git add .
           git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
           git push
 
