@@ -92,9 +92,8 @@ jobs:
       # manifest リポジトリに新しい deployment ファイルを作成
       - name: Create deployment.yaml in manifest repo
         run: |
-          # GitHub CLI と OIDC トークンで manifest リポジトリをクローン
-          gh auth login --with-token <<< "$GITHUB_TOKEN"
-          gh repo clone ${{ env.MANIFEST_REPO }} manifest-repo
+          # GitHub Actions の GITHUB_TOKEN で manifest リポジトリをクローン
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.MANIFEST_REPO }} manifest-repo
           cd manifest-repo/apps/${{ env.PROJECT }}
 
           # 新しい deployment ファイル名を作成
@@ -113,34 +112,36 @@ jobs:
           git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
           git push
 
-
-# name: CI-OIDC Build and Push with Auto Manifest Update
+# name: CI-OIDC Build and Push for cicd-study-service
 
 # on:
-#   push:
-#     branches:
-#       - main
 #   workflow_dispatch:
+#     inputs:
+#       VERSION:
+#         description: 'Dockerイメージのバージョン (例: 1.0.3)'
+#         required: true  # 必須入力
 
 # env:
-#   IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
-#   AWS_REGION: ap-south-1  # AWS のリージョン
-#   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}  # 作成済みの OIDC ロール
+#   PROJECT: cicd-study-service                     # 固定プロジェクト名
+#   ECR_REPO: cicd-shared-repo                     # 共用ECRリポジトリ名
+#   AWS_REGION: ap-south-1
+#   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
+#   MANIFEST_REPO: wuyang026/cicd-study-manifest   # manifestリポジトリ名
 
 # jobs:
 #   build-and-deploy:
 #     runs-on: ubuntu-latest
 #     permissions:
-#       contents: read       # リポジトリ内容の読み取り権限
-#       packages: write      # パッケージ書き込み権限
-#       id-token: write      # OIDC トークン取得権限（必須）
+#       contents: read
+#       packages: write
+#       id-token: write
 
 #     steps:
-#       # リポジトリをチェックアウト
-#       - name: Checkout app repository
+#       # リポジトリをチェックアウト（サブモジュールは無効化）
+#       - name: Checkout repository
 #         uses: actions/checkout@v3
 #         with:
-#           submodules: false  # submodule を自動初期化
+#           submodules: false
 
 #       # JDK 21 のセットアップ
 #       - name: Set up JDK 21
@@ -157,16 +158,23 @@ jobs:
 #       - name: Build JAR
 #         run: ./gradlew :app:api:bootJar
 
-#       # コミット SHA をタグとして環境変数に設定
-#       - name: Set version tag (commit SHA)
-#         run: echo "TAG=${{ github.sha }}" >> $GITHUB_ENV
+#       # VERSION の必須チェック
+#       - name: Set VERSION
+#         run: |
+#           if [ -z "${{ github.event.inputs.VERSION }}" ]; then
+#             echo "ERROR: VERSION が入力されていません。必須です。"
+#             exit 1
+#           fi
+#           echo "VERSION=${{ github.event.inputs.VERSION }}" >> $GITHUB_ENV
 
-#       # AWS CLI を OIDC で設定
+#       # OIDC を使用して AWS CLI を設定
 #       - name: Configure AWS credentials via OIDC
 #         uses: aws-actions/configure-aws-credentials@v4
 #         with:
 #           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
 #           aws-region: ${{ env.AWS_REGION }}
+
+#       # AWS アカウントID取得
 #       - name: Get AWS Account ID
 #         id: account
 #         run: |
@@ -177,55 +185,161 @@ jobs:
 #       - name: Login to Amazon ECR
 #         uses: aws-actions/amazon-ecr-login@v2
 
-#       # Docker イメージのビルド
+#       # Docker イメージビルド
 #       - name: Build Docker image
 #         run: |
-#           docker build -t ${{ env.IMAGE_NAME }}:${{ env.TAG }} -f Dockerfile .
+#           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+#           docker build -t $IMAGE_NAME -f Dockerfile .
 
-#       # Docker イメージのタグ付け
-#       - name: Tag Docker image
+#       # Docker イメージにタグを付与して ECR 用に
+#       - name: Tag Docker image for ECR
 #         run: |
-#           docker tag ${{ env.IMAGE_NAME }}:${{ env.TAG }} \
-#           ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+#           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+#           docker tag $IMAGE_NAME ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
 
-#       # Docker イメージを Amazon ECR にプッシュ
-#       - name: Push Docker image to Amazon ECR
+#       # Docker イメージを ECR に push
+#       - name: Push Docker image to ECR
 #         run: |
-#           docker push \
-#           ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+#           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+#           docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
 
-#       # manifest リポジトリの deployment.yaml を更新
-#       #- name: Update deployment.yaml in manifest repo
-#       #  run: |
-#       #    git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
-#       #    cd cicd-study-manifest/apps/cicd-study-service
-
-#           # イメージタグを更新
-#       #    sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' deployment.yaml
-#       #    git config user.name "github-actions"
-#       #    git config user.email "actions@github.com"
-#       #    git commit -am "Update image to ${{ env.TAG }}"
-#       #    git push
-#       # manifest リポジトリの deployment.yaml を新規作成
-#       - name: Create new deployment.yaml in manifest repo
+#       # manifest リポジトリに新しい deployment ファイルを作成
+#       - name: Create deployment.yaml in manifest repo
 #         run: |
-#           git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
-#           cd cicd-study-manifest/apps/cicd-study-service
-      
-#           # 新しい deployment ファイル名を生成
-#           NEW_DEPLOYMENT_FILE="deployment-${{ env.TAG }}.yaml"
-      
-#           # 元の deployment.yaml をコピーして新しいファイルを作成
+#           # GitHub CLI と OIDC トークンで manifest リポジトリをクローン
+#           gh auth login --with-token <<< "$GITHUB_TOKEN"
+#           gh repo clone ${{ env.MANIFEST_REPO }} manifest-repo
+#           cd manifest-repo/apps/${{ env.PROJECT }}
+
+#           # 新しい deployment ファイル名を作成
+#           NEW_DEPLOYMENT_FILE="deployment-${{ env.PROJECT }}-${{ env.VERSION }}.yaml"
 #           cp deployment.yaml $NEW_DEPLOYMENT_FILE
-      
+
 #           # イメージタグを更新
-#           sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' $NEW_DEPLOYMENT_FILE
-      
+#           sed -i 's|\(image: .*/.*:\).*|\1${{ env.PROJECT }}-${{ env.VERSION }}|' $NEW_DEPLOYMENT_FILE
+
 #           # git 設定
 #           git config user.name "github-actions"
 #           git config user.email "actions@github.com"
-      
-#           # 新しいファイルを追加してコミット
+
+#           # 新しいファイルをコミットして push
 #           git add $NEW_DEPLOYMENT_FILE
-#           git commit -m "Add new deployment for image tag ${{ env.TAG }}"
+#           git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
 #           git push
+
+
+# # name: CI-OIDC Build and Push with Auto Manifest Update
+
+# # on:
+# #   push:
+# #     branches:
+# #       - main
+# #   workflow_dispatch:
+
+# # env:
+# #   IMAGE_NAME: ghcr.io/wuyang026/cicd-study-service
+# #   AWS_REGION: ap-south-1  # AWS のリージョン
+# #   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}  # 作成済みの OIDC ロール
+
+# # jobs:
+# #   build-and-deploy:
+# #     runs-on: ubuntu-latest
+# #     permissions:
+# #       contents: read       # リポジトリ内容の読み取り権限
+# #       packages: write      # パッケージ書き込み権限
+# #       id-token: write      # OIDC トークン取得権限（必須）
+
+# #     steps:
+# #       # リポジトリをチェックアウト
+# #       - name: Checkout app repository
+# #         uses: actions/checkout@v3
+# #         with:
+# #           submodules: false  # submodule を自動初期化
+
+# #       # JDK 21 のセットアップ
+# #       - name: Set up JDK 21
+# #         uses: actions/setup-java@v3
+# #         with:
+# #           distribution: temurin
+# #           java-version: 21
+
+# #       # Gradle Wrapper に実行権限を付与
+# #       - name: Grant execute permission to Gradle Wrapper
+# #         run: chmod +x ./gradlew
+
+# #       # JAR をビルド
+# #       - name: Build JAR
+# #         run: ./gradlew :app:api:bootJar
+
+# #       # コミット SHA をタグとして環境変数に設定
+# #       - name: Set version tag (commit SHA)
+# #         run: echo "TAG=${{ github.sha }}" >> $GITHUB_ENV
+
+# #       # AWS CLI を OIDC で設定
+# #       - name: Configure AWS credentials via OIDC
+# #         uses: aws-actions/configure-aws-credentials@v4
+# #         with:
+# #           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+# #           aws-region: ${{ env.AWS_REGION }}
+# #       - name: Get AWS Account ID
+# #         id: account
+# #         run: |
+# #           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+# #           echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+# #       # Amazon ECR にログイン
+# #       - name: Login to Amazon ECR
+# #         uses: aws-actions/amazon-ecr-login@v2
+
+# #       # Docker イメージのビルド
+# #       - name: Build Docker image
+# #         run: |
+# #           docker build -t ${{ env.IMAGE_NAME }}:${{ env.TAG }} -f Dockerfile .
+
+# #       # Docker イメージのタグ付け
+# #       - name: Tag Docker image
+# #         run: |
+# #           docker tag ${{ env.IMAGE_NAME }}:${{ env.TAG }} \
+# #           ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+
+# #       # Docker イメージを Amazon ECR にプッシュ
+# #       - name: Push Docker image to Amazon ECR
+# #         run: |
+# #           docker push \
+# #           ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+
+# #       # manifest リポジトリの deployment.yaml を更新
+# #       #- name: Update deployment.yaml in manifest repo
+# #       #  run: |
+# #       #    git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
+# #       #    cd cicd-study-manifest/apps/cicd-study-service
+
+# #           # イメージタグを更新
+# #       #    sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' deployment.yaml
+# #       #    git config user.name "github-actions"
+# #       #    git config user.email "actions@github.com"
+# #       #    git commit -am "Update image to ${{ env.TAG }}"
+# #       #    git push
+# #       # manifest リポジトリの deployment.yaml を新規作成
+# #       - name: Create new deployment.yaml in manifest repo
+# #         run: |
+# #           git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
+# #           cd cicd-study-manifest/apps/cicd-study-service
+      
+# #           # 新しい deployment ファイル名を生成
+# #           NEW_DEPLOYMENT_FILE="deployment-${{ env.TAG }}.yaml"
+      
+# #           # 元の deployment.yaml をコピーして新しいファイルを作成
+# #           cp deployment.yaml $NEW_DEPLOYMENT_FILE
+      
+# #           # イメージタグを更新
+# #           sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' $NEW_DEPLOYMENT_FILE
+      
+# #           # git 設定
+# #           git config user.name "github-actions"
+# #           git config user.email "actions@github.com"
+      
+# #           # 新しいファイルを追加してコミット
+# #           git add $NEW_DEPLOYMENT_FILE
+# #           git commit -m "Add new deployment for image tag ${{ env.TAG }}"
+# #           git push
