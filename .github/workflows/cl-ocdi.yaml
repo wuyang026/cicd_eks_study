@@ -79,14 +79,37 @@ jobs:
           ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.TAG }}
 
       # manifest リポジトリの deployment.yaml を更新
-      - name: Update deployment.yaml in manifest repo
+      #- name: Update deployment.yaml in manifest repo
+      #  run: |
+      #    git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
+      #    cd cicd-study-manifest/apps/cicd-study-service
+
+          # イメージタグを更新
+      #    sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' deployment.yaml
+      #    git config user.name "github-actions"
+      #    git config user.email "actions@github.com"
+      #    git commit -am "Update image to ${{ env.TAG }}"
+      #    git push
+      # manifest リポジトリの deployment.yaml を新規作成
+      - name: Create new deployment.yaml in manifest repo
         run: |
           git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
           cd cicd-study-manifest/apps/cicd-study-service
-
+      
+          # 新しい deployment ファイル名を生成
+          NEW_DEPLOYMENT_FILE="deployment-${{ env.TAG }}.yaml"
+      
+          # 元の deployment.yaml をコピーして新しいファイルを作成
+          cp deployment.yaml $NEW_DEPLOYMENT_FILE
+      
           # イメージタグを更新
-          sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' deployment.yaml
+          sed -i 's|\(image: .*/.*:\).*|\1${{ env.TAG }}|' $NEW_DEPLOYMENT_FILE
+      
+          # git 設定
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git commit -am "Update image to ${{ env.TAG }}"
+      
+          # 新しいファイルを追加してコミット
+          git add $NEW_DEPLOYMENT_FILE
+          git commit -m "Add new deployment for image tag ${{ env.TAG }}"
           git push
