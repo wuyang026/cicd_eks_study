@@ -5,14 +5,14 @@ on:
     inputs:
       VERSION:
         description: 'Dockerイメージのバージョン (例: v1.0.3)'
-        required: true  # 必須入力
+        required: true
 
 env:
-  PROJECT: cicd-study-service                     # 固定プロジェクト名
-  ECR_REPO: cicd-shared-repo                     # 共用ECRリポジトリ名
+  PROJECT: cicd-study-service
+  ECR_REPO: cicd-shared-repo
   AWS_REGION: ap-south-1
   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
-  MANIFEST_REPO: wuyang026/cicd-study-manifest   # manifestリポジトリ名
+  MANIFEST_REPO: wuyang026/cicd-study-manifest
 
 jobs:
   build-and-deploy:
@@ -23,90 +23,190 @@ jobs:
       id-token: write
 
     steps:
-      # リポジトリをチェックアウト（サブモジュールは無効化）
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          submodules: false
 
-      # JDK 21 のセットアップ
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 21
 
-      # Gradle Wrapper に実行権限を付与
       - name: Grant execute permission to Gradle Wrapper
         run: chmod +x ./gradlew
 
-      # JAR をビルド
       - name: Build JAR
         run: ./gradlew :app:api:bootJar
 
-      # VERSION の必須チェック
-      - name: Set VERSION
+      - name: Validate VERSION
         run: |
           if [ -z "${{ github.event.inputs.VERSION }}" ]; then
-            echo "ERROR: VERSION が入力されていません。必須です。"
+            echo "VERSION が空です。必須です。"
             exit 1
           fi
           echo "VERSION=${{ github.event.inputs.VERSION }}" >> $GITHUB_ENV
 
-      # OIDC を使用して AWS CLI を設定
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # AWS アカウントID取得
       - name: Get AWS Account ID
         id: account
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
 
-      # Amazon ECR にログイン
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Docker イメージビルド
       - name: Build Docker image
         run: |
           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
           docker build -t $IMAGE_NAME -f Dockerfile .
 
-      # Docker イメージにタグを付与して ECR 用に
-      - name: Tag Docker image for ECR
+      - name: Tag Docker image
         run: |
-          IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
-          docker tag $IMAGE_NAME ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
+          IMAGE="${{ env.PROJECT }}-${{ env.VERSION }}"
+          REPO_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}
 
-      # Docker イメージを ECR に push
+          docker tag $IMAGE $REPO_URI:$IMAGE
+          docker tag $IMAGE $REPO_URI:latest   # ★ latest 自動更新
+
       - name: Push Docker image to ECR
         run: |
-          IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
-          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
+          IMAGE="${{ env.PROJECT }}-${{ env.VERSION }}"
+          REPO_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}
 
-      # manifest リポジトリに新しい deployment ファイルを作成
-      - name: Create deployment.yaml in manifest repo
+          docker push $REPO_URI:$IMAGE
+          docker push $REPO_URI:latest         # ★ latest 上書き
+
+      - name: Update manifest repository
         run: |
-          # GitHub Actions の GITHUB_TOKEN で manifest リポジトリをクローン
-          git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
+          git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/${{ env.MANIFEST_REPO }}.git
           cd cicd-study-manifest/apps/${{ env.PROJECT }}
 
-          # イメージタグを更新
-          sed -i 's|\(image: .*/.*:\).*|\1${{ env.PROJECT }}-${{ env.VERSION }}|' deployment.yaml
-          
-          # git 設定
+          # 新しい image tag に置換
+          sed -i "s|image: .*/.*:.*|image: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ env.PROJECT }}-${{ env.VERSION }}|" deployment.yaml
+
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          # 新しいファイルをコミットして push
-          git add .
-          git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
-          git push
+          git add deployment.yaml
+          git commit -m "Update deployment image to ${{ env.PROJECT }}-${{ env.VERSION }}"
+          git push origin main   # ← manifest repo のデフォルト branch
+
+
+# name: CI-OIDC Build and Push for cicd-study-service
+
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       VERSION:
+#         description: 'Dockerイメージのバージョン (例: v1.0.3)'
+#         required: true  # 必須入力
+
+# env:
+#   PROJECT: cicd-study-service                     # 固定プロジェクト名
+#   ECR_REPO: cicd-shared-repo                     # 共用ECRリポジトリ名
+#   AWS_REGION: ap-south-1
+#   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
+#   MANIFEST_REPO: wuyang026/cicd-study-manifest   # manifestリポジトリ名
+
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       packages: write
+#       id-token: write
+
+#     steps:
+#       # リポジトリをチェックアウト（サブモジュールは無効化）
+#       - name: Checkout repository
+#         uses: actions/checkout@v3
+#         with:
+#           submodules: false
+
+#       # JDK 21 のセットアップ
+#       - name: Set up JDK 21
+#         uses: actions/setup-java@v3
+#         with:
+#           distribution: temurin
+#           java-version: 21
+
+#       # Gradle Wrapper に実行権限を付与
+#       - name: Grant execute permission to Gradle Wrapper
+#         run: chmod +x ./gradlew
+
+#       # JAR をビルド
+#       - name: Build JAR
+#         run: ./gradlew :app:api:bootJar
+
+#       # VERSION の必須チェック
+#       - name: Set VERSION
+#         run: |
+#           if [ -z "${{ github.event.inputs.VERSION }}" ]; then
+#             echo "ERROR: VERSION が入力されていません。必須です。"
+#             exit 1
+#           fi
+#           echo "VERSION=${{ github.event.inputs.VERSION }}" >> $GITHUB_ENV
+
+#       # OIDC を使用して AWS CLI を設定
+#       - name: Configure AWS credentials via OIDC
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+#           aws-region: ${{ env.AWS_REGION }}
+
+#       # AWS アカウントID取得
+#       - name: Get AWS Account ID
+#         id: account
+#         run: |
+#           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+#           echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+#       # Amazon ECR にログイン
+#       - name: Login to Amazon ECR
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       # Docker イメージビルド
+#       - name: Build Docker image
+#         run: |
+#           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+#           docker build -t $IMAGE_NAME -f Dockerfile .
+
+#       # Docker イメージにタグを付与して ECR 用に
+#       - name: Tag Docker image for ECR
+#         run: |
+#           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+#           docker tag $IMAGE_NAME ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
+
+#       # Docker イメージを ECR に push
+#       - name: Push Docker image to ECR
+#         run: |
+#           IMAGE_NAME="${{ env.PROJECT }}-${{ env.VERSION }}"
+#           docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:$IMAGE_NAME
+
+#       # manifest リポジトリに新しい deployment ファイルを作成
+#       - name: Create deployment.yaml in manifest repo
+#         run: |
+#           # GitHub Actions の GITHUB_TOKEN で manifest リポジトリをクローン
+#           git clone https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/wuyang026/cicd-study-manifest.git
+#           cd cicd-study-manifest/apps/${{ env.PROJECT }}
+
+#           # イメージタグを更新
+#           sed -i 's|\(image: .*/.*:\).*|\1${{ env.PROJECT }}-${{ env.VERSION }}|' deployment.yaml
+          
+#           # git 設定
+#           git config user.name "github-actions"
+#           git config user.email "actions@github.com"
+
+#           # 新しいファイルをコミットして push
+#           git add .
+#           git commit -m "Add new deployment for ${NEW_DEPLOYMENT_FILE}"
+#           git push
 
 
 # name: CI-OIDC Build and Push for cicd-study-service
